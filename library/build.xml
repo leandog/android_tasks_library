@@ -1,92 +1,109 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project name="LeanDogAndroidTasks" default="help">
 
-    <!-- The local.properties file is created and updated by the 'android' tool.
-         It contains the path to the SDK. It should *NOT* be checked into
-         Version Control Systems. -->
-    <property file="local.properties" />
+    <!-- Override default property values with an external properties file, if present. -->
+    <property file='build.properties'/>
 
-    <!-- The ant.properties file can be created by you. It is only edited by the
-         'android' tool to add properties to it.
-         This is the place to change some Ant specific build properties.
-         Here are some properties you may want to change/update:
+    <!-- Default property values, if not overridden elsewhere: -->
+    <property name='build' location='bin' />
+    <property name='app.version' value='1.0'/>
+    <property name='app.name' value='leandog-android-tasks'/>
+    <property name='distro-name' value='${app.name}-${app.version}'/>
+    <property name='out.dir' value='bin'/>
+    <property name='src.dir' value='src'/>
+    <tstamp><format property='build.time' pattern='yyyy-MM-dd HH:mm:ss'/></tstamp>
 
-         source.dir
-             The name of the source directory. Default is 'src'.
-         out.dir
-             The name of the output directory. Default is 'bin'.
+    <path id='compile.classpath'>
+        <fileset dir='libs'>
+            <include name='*.jar'/>
+        </fileset>
+    </path>
 
-         For other overridable properties, look at the beginning of the rules
-         files in the SDK, at tools/ant/build.xml
+    <!-- Simply extends the compile.classpath with your own compiled classes. -->
+    <path id='run.classpath'>
+        <path refid='compile.classpath'/>
+        <path location='${src.dir}'/>
+    </path>
 
-         Properties related to the SDK location or the project target should
-         be updated using the 'android' tool with the 'update' action.
+    <fileset id='class.files' dir='src'>
+        <include name='${out.dir}/classes/**/*.class'/>
+    </fileset>
 
-         This file is an integral part of the build system for your
-         application and should be checked into Version Control Systems.
+    <fileset id='files.for.jar' dir='src'>
+        <exclude name='${src.dir}'/>
+    </fileset>
 
-         -->
-    <property file="ant.properties" />
+    <fileset id='test.classes' dir='src'>
+        <include name='../unit/**/*Test.java'/>
+    </fileset>
 
-    <!-- if sdk.dir was not set from one of the property file, then
-         get it from the ANDROID_HOME env var.
-         This must be done before we load project.properties since
-         the proguard config can use sdk.dir -->
-    <property environment="env" />
-    <condition property="sdk.dir" value="${env.ANDROID_HOME}">
-        <isset property="env.ANDROID_HOME" />
-    </condition>
+    <echo>
+    Application: ${app.name} ${app.version}
+    Build File : ${ant.file}
+    Run Date   : ${build.time}
+    Run by     : ${user.name}
+    Build Dir  : ${build}
+    Base Dir   : ${basedir}
+    Java Home  : ${java.home}
+    Deployment host running: ${deployment.server.running}
+    </echo>
 
-    <!-- The project.properties file is created and updated by the 'android'
-         tool, as well as ADT.
+    <target name='setup' description="Creates all build artifacts." >
+        <echo message='Create build directory, and its subdirectories.'/>
+        <mkdir dir="${build}"/>
+        <mkdir dir="${build}/classes/"/>
+    </target>
 
-         This contains project specific properties such as project target, and library
-         dependencies. Lower level build properties are stored in ant.properties
-         (or in .classpath for Eclipse projects).
+    <!-- Now define the targets, which use the properties and datatypes defined above. -->
 
-         This file is an integral part of the build system for your
-         application and should be checked into Version Control Systems. -->
-    <loadproperties srcFile="project.properties" />
+    <target name='clean' description="Delete all build artifacts." >
+        <delete dir='${build}'/>
+        <delete>
+            <fileset refid='class.files'/>
+        </delete>
+    </target>
 
-    <!-- quick check on sdk.dir -->
-    <fail
-            message="sdk.dir is missing. Make sure to generate local.properties using 'android update project' or to inject it through the ANDROID_HOME environment variable."
-            unless="sdk.dir"
-    />
+    <target name='compile' depends="setup" description='Compile source files and place beside source.'>
+        <javac srcdir="${src.dir}" destdir="${out.dir}/classes/">
+            <classpath refid='compile.classpath'/>
+        </javac>
+        <!-- Here's a simple way of debugging a path, fileset, or patternset, using its refid: -->
+        <echo>Classpath: ${toString:compile.classpath}</echo>
+    </target>
 
-    <!--
-        Import per project custom build rules if present at the root of the project.
-        This is the place to put custom intermediary targets such as:
-            -pre-build
-            -pre-compile
-            -post-compile (This is typically used for code obfuscation.
-                           Compiled code location: ${out.classes.absolute.dir}
-                           If this is not done in place, override ${out.dex.input.absolute.dir})
-            -post-package
-            -post-build
-            -pre-clean
-    -->
-    <import file="custom_rules.xml" optional="true" />
+    <target name='test' description='Run all JUnit tests.' depends='compile'>
+        <junit haltonfailure='true'>
+            <classpath>
+                <pathelement location="src"/>
+            </classpath>
+            <batchtest>
+                <fileset refid='test.classes'/>
+            </batchtest>
+            <formatter type='brief' usefile='no'/>
+        </junit>
+    </target>
 
-    <!-- Import the actual build file.
+    <target name='jar' description='Create a jar file for distribution.' depends='compile'>
+        <jar destfile='${build}/${distro-name}.jar' duplicate='preserve'>
+            <fileset refid='files.for.jar'/>
+            <!-- The static manifest.mf file is merged with additional dynamic items, specified here : -->
 
-         To customize existing targets, there are two options:
-         - Customize only one target:
-             - copy/paste the target into this file, *before* the
-               <import> task.
-             - customize it to your needs.
-         - Customize the whole content of build.xml
-             - copy/paste the content of the rules files (minus the top node)
-               into this file, replacing the <import> task.
-             - customize to your needs.
+              <manifest>
+                <attribute name="Built-By" value="${user.name}"/>
+                <section name="common">
+                  <attribute name="Specification-Title" value="Example"/>
+                  <attribute name="Specification-Version" value="${version}"/>
+                  <attribute name="Specification-Vendor" value="LeanDog"/>
+                  <attribute name="Implementation-Version" value="${version} ${TODAY}"/>
+                  <attribute name="Implementation-Vendor" value="Example Corp."/>
+                </section>
+              </manifest>
+        </jar>
+    </target>
 
-         ***********************
-         ****** IMPORTANT ******
-         ***********************
-         In all cases you must update the value of version-tag below to read 'custom' instead of an integer,
-         in order to avoid having your file be overridden by tools such as "android update project"
-    -->
-    <!-- version-tag: 1 -->
-    <import file="${sdk.dir}/tools/ant/build.xml" />
+    <target name='all' description='Create all build artifacts.'
+        depends='clean, compile, test, jar'>
+        <echo>Finished creating all build artifacts.</echo>
+    </target>
 
 </project>
